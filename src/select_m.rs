@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use tokio::{
     select,
@@ -87,8 +87,76 @@ async fn pattern_matching() {
     }
 }
 
+async fn borrowing() {
+    let (tx1, rx1) = oneshot::channel::<&str>();
+    let (tx2, rx2) = oneshot::channel::<&str>();
+
+    let mut map: HashMap<&str, String> = HashMap::new();
+
+    map.insert("key", "data".to_string());
+
+    let _ = tx1.send("key");
+    let _ = tx2.send("not key");
+
+    // two seprate futures can access the data map ref
+    let map = &map;
+
+    select! {
+        Ok(key) = rx1 => {
+            if let Some(dd) = map.get(key) {
+                println!("Value is: {dd}");
+            }
+        }
+        Ok(key) = rx2 => {
+            if let Some(dd) = map.get(key) {
+                println!("Value is: {dd}");
+            } else {
+                println!("Value is: None");
+            }
+        }
+    }
+}
+
+async fn mut_borrowing() {
+    let (tx1, rx1) = oneshot::channel::<&str>();
+    let (tx2, rx2) = oneshot::channel::<&str>();
+
+    let mut map: HashMap<&str, u32> = HashMap::new();
+
+    map.insert("key", 1);
+
+    let _ = tx1.send("key");
+    let _ = tx2.send("not key");
+
+    // two seprate futures can access the data map ref
+    let map = &mut map;
+
+    select! {
+        Ok(key) = rx1 => {
+            if let Some(v) = map.get(key) {
+                println!("Old Value is: {v}");
+                let vv = v.clone() + 1;
+                map.insert(key, vv);
+                println!("new Value is: {vv}");
+            }
+        }
+        Ok(key) = rx2 => {
+            if let Some(v) = map.get(key) {
+                println!("Old Value is: {v}");
+                let vv = v.clone() + 1;
+                map.insert(key, vv);
+                println!("new Value is: {vv}");
+            } else {
+                println!("Value is: None");
+            }
+        }
+    }
+}
+
 pub async fn start() {
     // intro().await;
     // cancellation().await;
-    pattern_matching().await;
+    // pattern_matching().await;
+    borrowing().await;
+    mut_borrowing().await;
 }
