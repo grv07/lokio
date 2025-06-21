@@ -49,10 +49,10 @@ async fn cancellation() {
     tokio::spawn(async { tx2.send("TX2") });
 
     select! {
-        val = rx1 => {
+        _val = rx1 => {
             println!("RX1 completes!!");
         }
-        val = rx2 => {
+        _val = rx2 => {
             println!("RX2 completes!!");
         }
     }
@@ -64,21 +64,21 @@ async fn pattern_matching() {
 
     tokio::spawn(async move {
         // tx1.send("hey").await;
-        tx1;
+        drop(tx1);
     });
 
     tokio::spawn(async move {
-        tx2.send("hey").await;
+        tx2.send("hey").await.unwrap();
         // tx2;
     });
 
     // if I drop one of the rx1/rx2 only one branch is invalidate since this will continue look for another to complete.
     // If both drops and resolve does not match with pattern it will  move to else block
     select! {
-        Some(val) = rx1.recv() => {
+        Some(_val) = rx1.recv() => {
             println!("Recv for RX1");
         }
-        Some(val) = rx2.recv() => {
+        Some(_val) = rx2.recv() => {
             println!("Recv for RX2");
         }
         else =>  {
@@ -153,10 +153,77 @@ async fn mut_borrowing() {
     }
 }
 
+pub async fn loops() {
+    let (tx1, mut rx1) = mpsc::channel::<&str>(20);
+    let (tx2, mut rx2) = mpsc::channel::<&str>(20);
+
+    tokio::spawn(async move {
+        tx1.send("MSG1").await.unwrap();
+    });
+
+    tokio::spawn(async move {
+        tx2.send("MSG2").await.unwrap();
+    });
+
+    loop {
+        select! {
+            Some(msg) = rx1.recv() => {
+                println!("msg comes: {msg}");
+            }
+            Some(msg) = rx2.recv() => {
+                println!("msg comes: {msg}");
+            }
+            else => {
+                println!("All done");
+                break;
+            }
+        }
+    }
+
+    println!("Out of loop: All of the msg got recived");
+}
+
 pub async fn start() {
-    // intro().await;
-    // cancellation().await;
-    // pattern_matching().await;
+    println!(
+        "
+           A verry simple intro of select!.
+           One shot channel only one would recive one will drop.
+        "
+    );
+    intro().await;
+
+    println!(
+        "
+           A verry simple cancellation in select!.
+           Two spawn task got created that will either complete or drop if another task got completed first. 
+           One shot channel only one would recive one will drop.
+        "
+    );
+    cancellation().await;
+
+    println!(
+        "
+           A verry simple pattern matching in select!.
+           If onw will not match go to next one and wait for it if any complete drop others.
+           If no one match excute else.
+        "
+    );
+    pattern_matching().await;
+
+    println!(
+        "
+           Both branches of select! take a ref of same data.        
+        "
+    );
     borrowing().await;
+
+    println!(" Both branches of select! take a mut ref of same data.");
     mut_borrowing().await;
+
+    println!(
+        "
+           A verry simple into of select!.
+        "
+    );
+    loops().await;
 }
